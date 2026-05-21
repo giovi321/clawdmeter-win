@@ -1,0 +1,27 @@
+# PlatformIO build artifacts
+firmware/.pio/
+firmware/.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Claude Code
+.claude/
+
+# Node tooling deps (npm install --no-save)
+tools/node_modules/
+tools/package-lock.json
+
+# Python
+__pycache__/
+*.pyc
+daemon/.venv/
+daemon/run_daemon.vbs
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
