@@ -28,6 +28,7 @@ ESPRESSIF_VID = 0x303A
 DEVICE_PID = 0x1001
 
 POLL_INTERVAL = 60
+PORT_CHECK_INTERVAL = 5  # seconds — how often to verify the COM port still exists
 BAUD_RATE = 115200
 SERIAL_TIMEOUT = 1  # seconds — non-blocking readline
 
@@ -362,12 +363,25 @@ def daemon_loop() -> None:
                 pass
 
         # ---- Poll loop ----
+        last_port_check = time.time()
         try:
             while not state.stop_event.is_set():
                 # Check for manual refresh request from tray
                 if state.refresh_event.is_set():
                     state.refresh_event.clear()
                     refresh_requested = True
+
+                # Periodically verify the COM port still exists.
+                # On Windows, unplugging a USB serial device doesn't
+                # always raise SerialException — readline() can silently
+                # return empty bytes forever on a stale handle.
+                now_pc = time.time()
+                if now_pc - last_port_check >= PORT_CHECK_INTERVAL:
+                    last_port_check = now_pc
+                    live_ports = {p.device for p in serial.tools.list_ports.comports()}
+                    if port not in live_ports:
+                        log(f"{port} disappeared — device unplugged")
+                        break
 
                 try:
                     line = ser.readline().decode("utf-8", errors="replace").strip()
