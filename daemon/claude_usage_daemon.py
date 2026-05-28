@@ -62,6 +62,7 @@ class DaemonState:
         self.last_update: float = 0
         self.stop_event = threading.Event()
         self.refresh_event = threading.Event()
+        self.hid_enabled: bool = True  # set via --no-hid
 
     def set_status(self, status: str, port: str | None = ...) -> None:
         with self.lock:
@@ -350,6 +351,16 @@ def daemon_loop() -> None:
         last_poll = 0.0
         refresh_requested = False
 
+        # Send HID config on connect
+        if not state.hid_enabled:
+            try:
+                cfg = json.dumps({"hid": False}, separators=(",", ":"))
+                ser.write((cfg + "\n").encode())
+                ser.flush()
+                log("Sent HID disabled config to device")
+            except serial.SerialException:
+                pass
+
         # ---- Poll loop ----
         try:
             while not state.stop_event.is_set():
@@ -522,6 +533,10 @@ def main_console() -> None:
 
 
 if __name__ == "__main__":
+    if "--no-hid" in sys.argv:
+        state.hid_enabled = False
+        log("HID buttons disabled via --no-hid")
+
     use_tray = "--tray" in sys.argv or "--no-tray" not in sys.argv
 
     if use_tray:

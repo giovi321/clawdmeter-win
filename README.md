@@ -102,6 +102,14 @@ When the device is unplugged, the daemon keeps running (tray icon turns grey) an
 | **Middle** (PWR) | Cycle screens (Usage / Connection); on splash, cycle animations |
 | **Right**        | Press to send Shift+Tab (Claude Code mode toggle)              |
 
+The HID keyboard buttons (Left / Right) can be disabled if you don't want accidental keypresses sent to the host:
+
+```bat
+python daemon\claude_usage_daemon.py --no-hid
+```
+
+The daemon sends `{"hid":false}` to the device on connect. The PWR button for screen cycling always works regardless. You can also disable HID at compile time by adding `-DHID_BUTTONS_DEFAULT=0` to `build_flags` in `platformio.ini`.
+
 ## USB serial protocol
 
 JSON payload format (daemon → device):
@@ -111,6 +119,8 @@ JSON payload format (daemon → device):
 ```
 
 Fields: `s` = session %, `sr` = session reset (minutes), `w` = weekly %, `wr` = weekly reset (minutes), `st` = status, `ok` = success flag.
+
+Config command (daemon → device): `{"hid":false}` to disable HID buttons, `{"hid":true}` to re-enable.
 
 Device responses: `{"ack":true}`, `{"err":true}`, `{"refresh":true}`, `{"ready":true}`
 

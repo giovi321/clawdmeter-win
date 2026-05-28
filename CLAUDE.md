@@ -93,3 +93,8 @@ Newline-delimited JSON over CDC serial:
 7. **System tray.** The daemon defaults to showing a pystray icon (requires
    `pystray` + `Pillow`). Pass `--no-tray` for headless console mode. Use
    `pythonw` (no console window) for background operation with tray only.
+
+8. **HID button disable.** Pass `--no-hid` to the daemon to send `{"hid":false}`
+   to the device on connect. The firmware gates PRIMARY and SECONDARY button HID
+   output behind a `hid_enabled` flag; PWR (screen cycling) is always active.
+   Compile-time default is set by `-DHID_BUTTONS_DEFAULT=1` in platformio.ini.

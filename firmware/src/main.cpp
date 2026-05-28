@@ -21,6 +21,14 @@
 
 static UsageData usage = {};
 
+// HID keyboard output can be disabled at runtime via {"hid":false} over serial,
+// or at compile time with -DHID_BUTTONS_DEFAULT=0. PWR button (screen cycling)
+// is always active regardless of this flag.
+#ifndef HID_BUTTONS_DEFAULT
+#define HID_BUTTONS_DEFAULT 1
+#endif
+static bool hid_enabled = HID_BUTTONS_DEFAULT;
+
 // ---- LVGL draw buffers (PSRAM, partial render mode) ----
 #define BUF_LINES 40
 static uint16_t* buf1 = nullptr;
@@ -84,6 +92,18 @@ static void my_touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     } else {
         data->state = LV_INDEV_STATE_RELEASED;
     }
+}
+
+// Try to handle a JSON line as a config command.
+// Returns true if the line was a config command (consumed), false otherwise.
+static bool try_parse_config(const char* json) {
+    JsonDocument doc;
+    if (deserializeJson(doc, json)) return false;
+    if (!doc.containsKey("hid")) return false;
+
+    hid_enabled = doc["hid"] | false;
+    Serial.printf("HID buttons %s\n", hid_enabled ? "enabled" : "disabled");
+    return true;
 }
 
 // Parse a JSON line into UsageData.
@@ -225,10 +245,10 @@ void loop() {
         if (primary_now != primary_was) {
             if (primary_now) {
                 if (idle_consume_wake_press()) primary_wake_swallowed = true;
-                else                            usb_keyboard_press(0x2C, 0);  // HID Space, no mods
+                else if (hid_enabled)           usb_keyboard_press(0x2C, 0);  // HID Space, no mods
             } else {
                 if (primary_wake_swallowed) primary_wake_swallowed = false;
-                else                        usb_keyboard_release();
+                else if (hid_enabled)       usb_keyboard_release();
             }
             primary_was = primary_now;
         }
@@ -240,10 +260,10 @@ void loop() {
             if (secondary_now != secondary_was) {
                 if (secondary_now) {
                     if (idle_consume_wake_press()) secondary_wake_swallowed = true;
-                    else                            usb_keyboard_press(0x2B, 0x02);  // HID Tab + LEFT_SHIFT
+                    else if (hid_enabled)           usb_keyboard_press(0x2B, 0x02);  // HID Tab + LEFT_SHIFT
                 } else {
                     if (secondary_wake_swallowed) secondary_wake_swallowed = false;
-                    else                          usb_keyboard_release();
+                    else if (hid_enabled)          usb_keyboard_release();
                 }
                 secondary_was = secondary_now;
             }
@@ -278,7 +298,10 @@ void loop() {
     // both come over the same USB CDC serial line.
 
     if (usb_has_data()) {
-        if (parse_json(usb_get_data(), &usage)) {
+        const char* raw = usb_get_data();
+        if (try_parse_config(raw)) {
+            usb_send_ack();
+        } else if (parse_json(raw, &usage)) {
             int g_before = usage_rate_group();
             usage_rate_sample(usage.session_pct);
             int g_after = usage_rate_group();
