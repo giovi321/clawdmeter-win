@@ -30,7 +30,7 @@ firmware/src/
   splash.{h,cpp}            — pixel-art animation engine (unchanged)
   data.h, theme.h, icons.h  — data types and assets (unchanged)
 daemon/
-  claude_usage_daemon.py    — Python daemon (pyserial + httpx)
+  claude_usage_daemon.py    — Python daemon (pyserial + httpx + pystray)
   requirements.txt          — pip dependencies
 ```
 
@@ -79,3 +79,17 @@ Newline-delimited JSON over CDC serial:
 
 4. All original gotchas from the upstream CLAUDE.md still apply (OPI PSRAM,
    pioarduino platform, LVGL 9 font patching, touch centralization, etc.).
+
+5. **Battery indicator is conditional.** Both boards have an AXP2101 PMU, but a
+   LiPo battery is optional hardware. `power_hal_battery_pct()` returns -1 when
+   `pmu.isBatteryConnect()` is false, and the UI hides the battery icon entirely.
+   Plugging a battery in at runtime makes it reappear.
+
+6. **OAuth token auto-refresh.** The daemon checks `expiresAt` before every poll
+   and POSTs to `https://platform.claude.com/v1/oauth/token` with the stored
+   refresh token when the access token is expired or about to expire. Refreshed
+   credentials are written back to `~/.claude/.credentials.json` atomically.
+
+7. **System tray.** The daemon defaults to showing a pystray icon (requires
+   `pystray` + `Pillow`). Pass `--no-tray` for headless console mode. Use
+   `pythonw` (no console window) for background operation with tray only.

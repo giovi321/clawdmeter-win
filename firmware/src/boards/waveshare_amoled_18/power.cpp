@@ -36,7 +36,7 @@ void power_hal_init(void) {
 
     cached_charging = pmu.isCharging();
     cached_vbus     = pmu.isVbusIn();
-    cached_pct = pmu.getBatteryPercent();
+    cached_pct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
 }
 
 void power_hal_tick(void) {
@@ -49,7 +49,7 @@ void power_hal_tick(void) {
     }
     if (now - last_battery_ms >= BATTERY_POLL_MS) {
         last_battery_ms = now;
-        cached_pct = pmu.getBatteryPercent();
+        cached_pct = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : -1;
     }
     if (now - last_pwr_ms >= PWR_POLL_MS) {
         last_pwr_ms = now;

@@ -115,10 +115,11 @@ static lv_obj_t* lbl_conn_status;
 static lv_obj_t* lbl_conn_device;
 static lv_obj_t* lbl_conn_info;
 
-// ---- Battery indicator (shared, on top) ----
+// ---- Battery indicator (shared, on top; hidden when no battery) ----
 static lv_obj_t* battery_img;
 static lv_obj_t* logo_img;
 static lv_image_dsc_t battery_dscs[5];  // empty, low, medium, full, charging
+static bool battery_present = false;
 
 // ---- Shared ----
 static lv_image_dsc_t logo_dsc;
@@ -460,8 +461,10 @@ void ui_tick_anim(void) {
 static screen_t prev_non_splash_screen = SCREEN_USAGE;
 static void apply_battery_visibility(void) {
     if (!battery_img) return;
-    if (current_screen == SCREEN_SPLASH) lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
-    else                                  lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    if (current_screen == SCREEN_SPLASH || !battery_present)
+        lv_obj_add_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
+    else
+        lv_obj_clear_flag(battery_img, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void global_click_cb(lv_event_t* e) {
@@ -540,11 +543,11 @@ void ui_update_conn_status(conn_state_t state, const char* name, const char* inf
 }
 
 void ui_update_battery(int percent, bool charging) {
+    battery_present = (percent >= 0) || charging;
+
     int idx;
     if (charging) {
         idx = 4;
-    } else if (percent < 0) {
-        idx = 0;
     } else if (percent <= 10) {
         idx = 0;
     } else if (percent <= 35) {

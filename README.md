@@ -23,7 +23,7 @@ Two boards are supported:
 - [Waveshare ESP32-S3-Touch-AMOLED-2.16](https://www.waveshare.com/esp32-s3-touch-amoled-2.16.htm) — 480x480 AMOLED, three buttons, IMU auto-rotation. Build env: `waveshare_amoled_216`.
 - [Waveshare ESP32-S3-Touch-AMOLED-1.8](https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm) — 368x448 portrait AMOLED, two buttons. Build env: `waveshare_amoled_18`.
 
-Plus a USB-C cable — that's it. No Bluetooth pairing, no battery required (powered by USB).
+Plus a USB-C cable — that's it. No Bluetooth pairing, no battery required (powered by USB). An optional LiPo battery is supported on both boards; the battery indicator appears automatically when one is connected.
 
 ## Prerequisites
 
@@ -58,7 +58,21 @@ pip install -r daemon\requirements.txt
 python daemon\claude_usage_daemon.py
 ```
 
-To auto-start at login:
+The daemon starts with a **system-tray icon** by default (orange = connected, grey = searching, red = error). Right-click the icon for Refresh / Quit.
+
+To run headless in a terminal instead:
+
+```bat
+python daemon\claude_usage_daemon.py --no-tray
+```
+
+To run in the background without a console window:
+
+```bat
+pythonw daemon\claude_usage_daemon.py --tray
+```
+
+To auto-start at login (background + tray icon):
 
 ```bat
 install.bat
@@ -68,6 +82,8 @@ install.bat
 
 The daemon auto-detects the COM port, reads your Claude OAuth token, and pushes usage data to the display every 60 seconds. You should see the usage meters update on the device.
 
+When the device is unplugged, the daemon keeps running (tray icon turns grey) and reconnects automatically when you plug it back in.
+
 ## How it works
 
 1. The daemon reads your Claude Code OAuth token from `~/.claude/.credentials.json`.
@@ -76,6 +92,7 @@ The daemon auto-detects the COM port, reads your Claude OAuth token, and pushes 
 4. The daemon sends a JSON payload over USB serial to the ESP32.
 5. The firmware parses it and updates the LVGL dashboard.
 6. Physical buttons send Space and Shift+Tab as USB HID keyboard input.
+7. When the OAuth token expires, the daemon automatically refreshes it using the stored refresh token — no manual re-login needed.
 
 ## Physical buttons
 
@@ -104,6 +121,10 @@ Device responses: `{"ack":true}`, `{"err":true}`, `{"refresh":true}`, `{"ready":
 **COM port conflict:** Only one program can open a COM port at a time on Windows. Stop the daemon before flashing or using the serial monitor.
 
 **No usage data:** Ensure Claude Code is installed and you have an active subscription. Check that `~/.claude/.credentials.json` exists and contains a valid token.
+
+**"Invalid authentication credentials":** Your OAuth token has expired. The daemon auto-refreshes tokens, but if the refresh token is also stale, run `claude` in a terminal to re-authenticate.
+
+**Windows long paths error during build:** If PlatformIO fails with `FileNotFoundError` during ESP32 library extraction, enable long paths: `reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f` (run as admin), then open a new terminal and retry.
 
 ## Credits
 
