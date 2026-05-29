@@ -85,10 +85,21 @@ Newline-delimited JSON over CDC serial:
    `pmu.isBatteryConnect()` is false, and the UI hides the battery icon entirely.
    Plugging a battery in at runtime makes it reappear.
 
-6. **OAuth token auto-refresh.** The daemon checks `expiresAt` before every poll
-   and POSTs to `https://platform.claude.com/v1/oauth/token` with the stored
-   refresh token when the access token is expired or about to expire. Refreshed
-   credentials are written back to `~/.claude/.credentials.json` atomically.
+6. **OAuth token auto-refresh.** Three-tier refresh chain:
+   (a) Direct POST to `https://platform.claude.com/v1/oauth/token` with the
+   stored refresh token — instant, no API call.
+   (b) If that fails, spawn `claude -p "hi" --max-turns 1` in the background
+   to trigger Claude Code's internal token refresh; then re-read credentials.
+   (c) If that also fails (refresh token dead), show "Token expired — run
+   'claude' to login" in the tray and return None so the poll is skipped.
+   Refreshed credentials are written back to `~/.claude/.credentials.json`
+   atomically. The daemon also detects 401 from `poll_api` and retries the
+   full refresh chain before giving up for that cycle.
+
+   **Windows COM port gotcha:** On USB replug, the COM port number can change
+   (e.g. COM6 → COM7). The inner poll loop checks
+   `serial.tools.list_ports.comports()` every 5 seconds; if the port vanishes,
+   it breaks out and the outer loop auto-detects the new port.
 
 7. **System tray.** The daemon defaults to showing a pystray icon (requires
    `pystray` + `Pillow`). Pass `--no-tray` for headless console mode. Use

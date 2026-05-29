@@ -92,7 +92,7 @@ When the device is unplugged, the daemon keeps running (tray icon turns grey) an
 4. The daemon sends a JSON payload over USB serial to the ESP32.
 5. The firmware parses it and updates the LVGL dashboard.
 6. Physical buttons send Space and Shift+Tab as USB HID keyboard input.
-7. When the OAuth token expires, the daemon automatically refreshes it using the stored refresh token — no manual re-login needed.
+7. When the OAuth token expires, the daemon refreshes it automatically — first via the stored refresh token, then by spawning `claude` in the background as a fallback. Manual re-login is only needed if the refresh token itself has expired (rare).
 
 ## Physical buttons
 
@@ -132,7 +132,7 @@ Device responses: `{"ack":true}`, `{"err":true}`, `{"refresh":true}`, `{"ready":
 
 **No usage data:** Ensure Claude Code is installed and you have an active subscription. Check that `~/.claude/.credentials.json` exists and contains a valid token.
 
-**"Invalid authentication credentials":** Your OAuth token has expired. The daemon auto-refreshes tokens, but if the refresh token is also stale, run `claude` in a terminal to re-authenticate.
+**"Invalid authentication credentials":** Your OAuth token has expired. The daemon tries three things automatically: (1) refresh via the stored refresh token, (2) spawn `claude` in the background to trigger its internal refresh, (3) re-read the credentials file. If the tray shows "Token expired — run 'claude' to login", the refresh token itself is dead and you need to run `claude` manually to re-authenticate via the browser.
 
 **Windows long paths error during build:** If PlatformIO fails with `FileNotFoundError` during ESP32 library extraction, enable long paths: `reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f` (run as admin), then open a new terminal and retry.
 
