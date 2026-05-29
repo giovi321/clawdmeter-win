@@ -242,10 +242,12 @@ def read_token() -> str | None:
         refreshed = _refresh_token(oauth, creds)
         if refreshed:
             return refreshed
+        # Refresh failed — re-read in case Claude Code refreshed it externally
         log("Token expired and refresh failed — re-reading file in case Claude Code refreshed it")
         creds = _read_credentials_file()
         oauth = _get_oauth_block(creds) if creds else None
-        if not oauth:
+        if not oauth or _is_token_expired(oauth):
+            log("Token still expired — run 'claude' in a terminal to re-authenticate")
             return None
 
     return oauth.get("accessToken")
@@ -428,7 +430,10 @@ def daemon_loop() -> None:
                             new_token = _refresh_token(oauth, creds)
                             if new_token:
                                 payload, _ = poll_api(new_token)
-                                state.set_status("Connected", port=port)
+                                if payload:
+                                    state.set_status("Connected", port=port)
+                        if payload is None:
+                            state.set_status("Token expired — run 'claude' to login")
 
                     if payload is not None:
                         state.set_usage(payload["s"], payload["w"])
