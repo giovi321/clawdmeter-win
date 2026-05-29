@@ -209,6 +209,41 @@ def _refresh_token(oauth: dict, creds: dict) -> str | None:
     return new_access
 
 
+def _refresh_via_claude_code() -> str | None:
+    """Spawn Claude Code briefly to trigger its internal token refresh.
+
+    Claude Code checks the token on startup and refreshes it if expired,
+    writing the new credentials back to disk. We run a minimal one-shot
+    prompt, wait for it to finish, then re-read the credentials file.
+    Returns the new access token, or None if it didn't work (e.g. the
+    refresh token itself is dead and Claude Code needs a browser login).
+    """
+    log("Spawning Claude Code to refresh token...")
+    try:
+        subprocess.run(
+            ["claude", "-p", "hi", "--max-turns", "1"],
+            capture_output=True, timeout=30,
+        )
+    except FileNotFoundError:
+        log("'claude' not found on PATH")
+        return None
+    except subprocess.TimeoutExpired:
+        log("Claude Code timed out during token refresh")
+        return None
+    except OSError as e:
+        log(f"Failed to spawn Claude Code: {e}")
+        return None
+
+    creds = _read_credentials_file()
+    oauth = _get_oauth_block(creds) if creds else None
+    if oauth and not _is_token_expired(oauth):
+        log("Token refreshed via Claude Code")
+        return oauth.get("accessToken")
+
+    log("Claude Code did not refresh the token — browser login may be required")
+    return None
+
+
 def _read_token_keychain() -> str | None:
     """Read token from macOS Keychain."""
     import getpass
@@ -242,13 +277,12 @@ def read_token() -> str | None:
         refreshed = _refresh_token(oauth, creds)
         if refreshed:
             return refreshed
-        # Refresh failed — re-read in case Claude Code refreshed it externally
-        log("Token expired and refresh failed — re-reading file in case Claude Code refreshed it")
-        creds = _read_credentials_file()
-        oauth = _get_oauth_block(creds) if creds else None
-        if not oauth or _is_token_expired(oauth):
-            log("Token still expired — run 'claude' in a terminal to re-authenticate")
-            return None
+        # Direct refresh failed — spawn Claude Code to trigger its internal refresh
+        refreshed = _refresh_via_claude_code()
+        if refreshed:
+            return refreshed
+        log("Token still expired — run 'claude' in a terminal to re-authenticate")
+        return None
 
     return oauth.get("accessToken")
 
