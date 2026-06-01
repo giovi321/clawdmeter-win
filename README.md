@@ -66,10 +66,17 @@ To run headless in a terminal instead:
 python daemon\claude_usage_daemon.py --no-tray
 ```
 
-To run in the background without a console window:
+To run in the background without a console window, double-click **`start-daemon.bat`** (or run it from a terminal):
 
 ```bat
-pythonw daemon\claude_usage_daemon.py --tray
+start-daemon.bat
+```
+
+It launches the daemon with `pythonw` (windowless Python) and the tray icon — no console window. If `where pythonw` shows a `...\WindowsApps\pythonw.exe` entry, that is the Microsoft Store alias stub; point the script at your real interpreter by setting an environment variable first:
+
+```bat
+set CLAWDMETER_PYTHONW=C:\Python314\pythonw.exe
+start-daemon.bat
 ```
 
 To auto-start at login (background + tray icon):
