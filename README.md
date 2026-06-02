@@ -117,6 +117,15 @@ python daemon\claude_usage_daemon.py --no-hid
 
 The daemon sends `{"hid":false}` to the device on connect. The PWR button for screen cycling always works regardless. You can also disable HID at compile time by adding `-DHID_BUTTONS_DEFAULT=0` to `build_flags` in `platformio.ini`.
 
+## Auto screen switching
+
+The display follows the USB connection state:
+
+- **Plugged back in** — when the host re-opens the serial port (CDC connected), the device jumps straight to the **Usage** meter.
+- **Unplugged for 5+ minutes** — when the connection has been dropped (CDC disconnected) for more than 5 minutes, the device switches to the **animation** screen as a screensaver. (Showing the animation while unplugged requires a battery — a USB-powered-only board is off when the cable is out.)
+
+Both are edge-triggered, so the PWR button can still freely cycle screens in between — the animation only re-asserts on the next disconnect/reconnect transition.
+
 ## USB serial protocol
 
 JSON payload format (daemon → device):

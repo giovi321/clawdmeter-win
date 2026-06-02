@@ -109,3 +109,13 @@ Newline-delimited JSON over CDC serial:
    to the device on connect. The firmware gates PRIMARY and SECONDARY button HID
    output behind a `hid_enabled` flag; PWR (screen cycling) is always active.
    Compile-time default is set by `-DHID_BUTTONS_DEFAULT=1` in platformio.ini.
+
+9. **Auto screen switching on connect/disconnect.** `loop()` watches
+   `usb_get_state()` (CDC DTR-driven connect/disconnect events). On CONNECTED it
+   shows `SCREEN_USAGE` immediately; on DISCONNECTED it arms a timer and, after
+   `DISCONNECT_TO_SPLASH_MS` (5 min), switches to `SCREEN_SPLASH`. Both are
+   edge-triggered (`disconnect_splash_armed` is cleared once it fires and on the
+   next connect), so PWR-button navigation isn't overridden between transitions.
+   Keyed off the CDC link, not data flow — so the animation only appears while
+   unplugged if a battery keeps the board powered (USB-only boards are off when
+   the cable is out, see gotcha #5).

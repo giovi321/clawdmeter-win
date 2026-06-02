@@ -215,7 +215,15 @@ void setup() {
         board_caps().name, W, H);
 }
 
+// Auto screen-switching on USB connect/disconnect:
+//   plugged back in (CDC CONNECTED)         -> show the meter immediately
+//   unplugged (CDC DISCONNECTED) for >5 min  -> show the animation
+// Both are edge-triggered, so the PWR button can still freely cycle screens
+// between connect/disconnect events without the animation re-asserting itself.
+#define DISCONNECT_TO_SPLASH_MS  (5UL * 60UL * 1000UL)
 static conn_state_t last_conn_state = CONN_STATE_INIT;
+static uint32_t     disconnected_since_ms = 0;
+static bool         disconnect_splash_armed = false;
 
 void loop() {
     idle_tick();
@@ -281,6 +289,25 @@ void loop() {
     if (cs != last_conn_state) {
         last_conn_state = cs;
         ui_update_conn_status(cs, usb_get_device_name(), usb_get_port_info());
+
+        if (cs == CONN_STATE_CONNECTED) {
+            // Plugged back in — return to the meter right away.
+            disconnect_splash_armed = false;
+            ui_show_screen(SCREEN_USAGE);
+        } else if (cs == CONN_STATE_DISCONNECTED) {
+            // Start the unplugged timer; the switch to the animation fires
+            // once it elapses (see below).
+            disconnected_since_ms = millis();
+            disconnect_splash_armed = true;
+        }
+    }
+
+    // Unplugged for longer than the timeout — switch to the animation once.
+    // millis() wraparound is safe under unsigned subtraction.
+    if (disconnect_splash_armed &&
+        (millis() - disconnected_since_ms) >= DISCONNECT_TO_SPLASH_MS) {
+        disconnect_splash_armed = false;
+        ui_show_screen(SCREEN_SPLASH);
     }
 
     static int  last_pct      = -2;
