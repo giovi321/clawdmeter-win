@@ -2,9 +2,13 @@
 
 A Windows-native USB fork of [Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter) — an ESP32-S3 desk dashboard for monitoring Claude Code usage in real-time.
 
-This fork replaces Bluetooth Low Energy with **USB** communication (CDC serial + HID keyboard over a single USB-C cable) and provides a cross-platform **Python daemon** that works natively on Windows.
+This fork replaces Bluetooth Low Energy with **USB** communication (CDC serial + HID keyboard over a single USB-C cable). This repository is the **firmware** for the device.
 
-> **Shared daemon:** the Python daemon here is also maintained as **[clawdmeter-daemon](https://github.com/giovi321/clawdmeter-daemon)** — one daemon that does **serial (this device), HTTP push, and HTTP serve**, so it drives both the Clawdmeter and the WiFi **[SmallTV](https://github.com/giovi321/smalltv-mod)** from a single tool.
+> **The host daemon now lives in its own repo: [clawdmeter-daemon](https://github.com/giovi321/clawdmeter-daemon).**
+> Install it from there and run it with `--serial` for this device. It is one daemon
+> with three transports — **serial (this device), HTTP push, HTTP serve** — so the
+> same tool also drives the WiFi **[SmallTV](https://github.com/giovi321/smalltv-mod)**.
+> This repository no longer bundles a daemon.
 
 ## What changed from the original
 
@@ -53,39 +57,18 @@ After flashing, the device re-enumerates as a USB composite device. Windows shou
 - **"Claude Controller"** under Ports (COM & LPT)
 - **"Claude Controller"** under Keyboards
 
-### 2. Install the daemon
+### 2. Run the daemon
+
+The daemon is its own project — **[clawdmeter-daemon](https://github.com/giovi321/clawdmeter-daemon)**. Install it and run it in **serial** mode; it auto-detects this device's COM port:
 
 ```bat
-pip install -r daemon\requirements.txt
-python daemon\claude_usage_daemon.py
+git clone https://github.com/giovi321/clawdmeter-daemon
+cd clawdmeter-daemon
+pip install -r requirements.txt
+python clawdmeter_daemon.py --serial
 ```
 
-The daemon starts with a **system-tray icon** by default (orange = connected, grey = searching, red = error). Right-click the icon for Refresh / Quit.
-
-To run headless in a terminal instead:
-
-```bat
-python daemon\claude_usage_daemon.py --no-tray
-```
-
-To run in the background without a console window, double-click **`start-daemon.bat`** (or run it from a terminal):
-
-```bat
-start-daemon.bat
-```
-
-It launches the daemon with `pythonw` (windowless Python) and the tray icon — no console window. If `where pythonw` shows a `...\WindowsApps\pythonw.exe` entry, that is the Microsoft Store alias stub; point the script at your real interpreter by setting an environment variable first:
-
-```bat
-set CLAWDMETER_PYTHONW=C:\Python314\pythonw.exe
-start-daemon.bat
-```
-
-To auto-start at login (background + tray icon):
-
-```bat
-install.bat
-```
+It starts with a **system-tray icon** (right-click to switch transport, Refresh, or Quit) and can auto-start at login on Windows. See the **[clawdmeter-daemon README](https://github.com/giovi321/clawdmeter-daemon)** for the tray, login autostart, the `pythonw` Store-stub workaround, a durable login token, and `--no-hid`.
 
 ### 3. Verify
 
@@ -111,10 +94,10 @@ When the device is unplugged, the daemon keeps running (tray icon turns grey) an
 | **Middle** (PWR) | Cycle screens (Usage / Connection); on splash, cycle animations |
 | **Right**        | Press to send Shift+Tab (Claude Code mode toggle)              |
 
-The HID keyboard buttons (Left / Right) can be disabled if you don't want accidental keypresses sent to the host:
+The HID keyboard buttons (Left / Right) can be disabled if you don't want accidental keypresses sent to the host — run the daemon with `--no-hid`:
 
 ```bat
-python daemon\claude_usage_daemon.py --no-hid
+python clawdmeter_daemon.py --serial --no-hid
 ```
 
 The daemon sends `{"hid":false}` to the device on connect. The PWR button for screen cycling always works regardless. You can also disable HID at compile time by adding `-DHID_BUTTONS_DEFAULT=0` to `build_flags` in `platformio.ini`.
