@@ -4,6 +4,8 @@ A Windows-native USB fork of [Clawdmeter](https://github.com/HermannBjorgvin/Cla
 
 This fork replaces Bluetooth Low Energy with **USB** communication (CDC serial + HID keyboard over a single USB-C cable) and provides a cross-platform **Python daemon** that works natively on Windows.
 
+> **Shared daemon:** the Python daemon here is also maintained as **[clawdmeter-daemon](https://github.com/giovi321/clawdmeter-daemon)** — one daemon that does **serial (this device), HTTP push, and HTTP serve**, so it drives both the Clawdmeter and the WiFi **[SmallTV](https://github.com/giovi321/smalltv-mod)** from a single tool.
+
 ## What changed from the original
 
 | Feature | Original (BLE) | This fork (USB) |
@@ -119,12 +121,12 @@ The daemon sends `{"hid":false}` to the device on connect. The PWR button for sc
 
 ## Auto screen switching
 
-The display follows the USB connection state:
+The display follows the host connection:
 
-- **Plugged back in** — when the host re-opens the serial port (CDC connected), the device jumps straight to the **Usage** meter.
-- **Unplugged for 5+ minutes** — when the connection has been dropped (CDC disconnected) for more than 5 minutes, the device switches to the **animation** screen as a screensaver. (Showing the animation while unplugged requires a battery — a USB-powered-only board is off when the cable is out.)
+- **Host present** — as soon as the host comes back (serial port re-opened, USB bus resumed, or a fresh data payload arrives), the device snaps to the **Usage** meter.
+- **Host gone** — the device switches to the **animation** screensaver about 60 seconds after the host disappears. "Gone" is detected three ways so it works through a powered hub too: the CDC link dropping, the USB bus suspending (powered-hub upstream cable pulled, or the PC sleeping — VBUS keeps the board alive but the data stops), or no data payload for 3 minutes (daemon running but silent).
 
-Both are edge-triggered, so the PWR button can still freely cycle screens in between — the animation only re-asserts on the next disconnect/reconnect transition.
+Both directions are edge-triggered, so the PWR button can still freely cycle screens in between. Showing the animation while unplugged needs a battery — a USB-powered-only board is off when the cable is out — but the powered-hub case keeps the board alive, so the screensaver appears there.
 
 ## USB serial protocol
 
