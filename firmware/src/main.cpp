@@ -215,15 +215,50 @@ void setup() {
         board_caps().name, W, H);
 }
 
-// Auto screen-switching on USB connect/disconnect:
-//   plugged back in (CDC CONNECTED)         -> show the meter immediately
-//   unplugged (CDC DISCONNECTED) for >5 min  -> show the animation
-// Both are edge-triggered, so the PWR button can still freely cycle screens
-// between connect/disconnect events without the animation re-asserting itself.
-#define DISCONNECT_TO_SPLASH_MS  (5UL * 60UL * 1000UL)
-static conn_state_t last_conn_state = CONN_STATE_INIT;
-static uint32_t     disconnected_since_ms = 0;
-static bool         disconnect_splash_armed = false;
+// ---- Auto screen-switching (hybrid: CDC link + USB suspend + data flow) ----
+// The host is considered "gone" when ANY of these say so:
+//   * the CDC link drops      — daemon closes the port, or cable unplugged on battery
+//   * the USB bus suspends     — powered-hub upstream pulled, or PC sleeps; VBUS
+//                                stays up so there's no CDC disconnect, but SOF
+//                                stops and usb_is_suspended() flips (see usb_comm)
+//   * no daemon payload arrives for DATA_STALE_MS — daemon alive but silent
+// After a link drop / suspend the animation appears SPLASH_DELAY_MS later — a
+// short debounce that also rides out transient blips. The data-staleness path
+// is a slower backstop and must stay well above the daemon's 60 s poll cadence.
+// The meter is restored the instant the host returns (connect / resume / data).
+// Every switch is edge-triggered, so PWR-button navigation is never overridden
+// between transitions.
+#define SPLASH_DELAY_MS  (60UL * 1000UL)     // link-drop / suspend -> animation
+#define DATA_STALE_MS    (180UL * 1000UL)    // no-data backstop (daemon polls every 60 s)
+
+static conn_state_t last_conn_state    = CONN_STATE_INIT;
+static uint32_t     last_data_ms       = 0;       // last valid daemon payload
+static bool         link_lost          = false;   // CDC down or USB suspended
+static uint32_t     link_lost_since_ms = 0;
+static bool         auto_splash_shown  = false;   // we auto-switched to the animation
+
+static void restore_meter_if_auto(void) {
+    if (auto_splash_shown) {
+        auto_splash_shown = false;
+        ui_show_screen(SCREEN_USAGE);
+    }
+}
+
+// Host is here (CDC connect, USB resume, or a fresh payload): clear the
+// disconnect timers and snap back to the meter if we'd auto-shown the animation.
+static void note_host_seen(void) {
+    link_lost = false;
+    last_data_ms = millis();
+    restore_meter_if_auto();
+}
+
+// Host link just dropped (CDC disconnect or USB suspend): arm the timer.
+static void note_link_lost(void) {
+    if (!link_lost) {
+        link_lost = true;
+        link_lost_since_ms = millis();
+    }
+}
 
 void loop() {
     idle_tick();
@@ -289,24 +324,27 @@ void loop() {
     if (cs != last_conn_state) {
         last_conn_state = cs;
         ui_update_conn_status(cs, usb_get_device_name(), usb_get_port_info());
-
-        if (cs == CONN_STATE_CONNECTED) {
-            // Plugged back in — return to the meter right away.
-            disconnect_splash_armed = false;
-            ui_show_screen(SCREEN_USAGE);
-        } else if (cs == CONN_STATE_DISCONNECTED) {
-            // Start the unplugged timer; the switch to the animation fires
-            // once it elapses (see below).
-            disconnected_since_ms = millis();
-            disconnect_splash_armed = true;
-        }
+        if (cs == CONN_STATE_CONNECTED)         note_host_seen();
+        else if (cs == CONN_STATE_DISCONNECTED) note_link_lost();
     }
 
-    // Unplugged for longer than the timeout — switch to the animation once.
-    // millis() wraparound is safe under unsigned subtraction.
-    if (disconnect_splash_armed &&
-        (millis() - disconnected_since_ms) >= DISCONNECT_TO_SPLASH_MS) {
-        disconnect_splash_armed = false;
+    // USB bus suspend/resume — catches the powered-hub-unplug and PC-sleep
+    // cases the CDC connect/disconnect events miss (VBUS stays up, no detach).
+    static bool last_suspended = false;
+    bool suspended = usb_is_suspended();
+    if (suspended != last_suspended) {
+        last_suspended = suspended;
+        if (suspended) note_link_lost();
+        else           note_host_seen();
+    }
+
+    // Switch to the animation once the host has been gone long enough. Two
+    // independent paths; millis() wraparound is safe under unsigned subtraction.
+    uint32_t now_ms = millis();
+    bool link_drop_elapsed = link_lost && (now_ms - link_lost_since_ms >= SPLASH_DELAY_MS);
+    bool data_stale = (last_data_ms != 0) && (now_ms - last_data_ms >= DATA_STALE_MS);
+    if (!auto_splash_shown && (link_drop_elapsed || data_stale)) {
+        auto_splash_shown = true;
         ui_show_screen(SCREEN_SPLASH);
     }
 
@@ -338,6 +376,7 @@ void loop() {
                 if (splash_is_active()) splash_pick_for_current_rate();
             }
             ui_update(&usage);
+            note_host_seen();   // fresh data => host present; restores the meter
             usb_send_ack();
         } else {
             usb_send_nack();

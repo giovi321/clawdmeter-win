@@ -23,6 +23,7 @@ USBCDC USBSerial(0);
 static USBHIDKeyboard Keyboard;
 
 static conn_state_t state = CONN_STATE_INIT;
+static volatile bool suspended = false;
 static char rx_buf[USB_BUF_SIZE];
 static volatile bool data_ready = false;
 static volatile bool has_received_data = false;
@@ -46,6 +47,21 @@ static void cdc_event_cb(void* arg, esp_event_base_t base, int32_t id, void* dat
     }
 }
 
+// ---- USB bus suspend/resume event callback ----
+// Bus-level (not CDC-level) events. These fire when the host stops driving the
+// bus even though VBUS is still present — the powered-hub-unplug and PC-sleep
+// cases that the CDC connect/disconnect events miss.
+static void usb_event_cb(void* arg, esp_event_base_t base, int32_t id, void* data) {
+    (void)arg;
+    (void)base;
+    (void)data;
+    if (id == ARDUINO_USB_SUSPEND_EVENT) {
+        suspended = true;
+    } else if (id == ARDUINO_USB_RESUME_EVENT) {
+        suspended = false;
+    }
+}
+
 void usb_comm_init(void) {
     // Configure USB device descriptors
     USB.productName(DEVICE_NAME);
@@ -59,6 +75,11 @@ void usb_comm_init(void) {
     // Register CDC interface and set up connection tracking
     USBSerial.begin(115200);
     USBSerial.onEvent(cdc_event_cb);
+
+    // Track bus suspend/resume so we can detect a vanished host even when VBUS
+    // stays up (powered hub) and no CDC disconnect is delivered.
+    USB.onEvent(ARDUINO_USB_SUSPEND_EVENT, usb_event_cb);
+    USB.onEvent(ARDUINO_USB_RESUME_EVENT, usb_event_cb);
 
     // Start the composite USB device (CDC + HID)
     USB.begin();
@@ -102,6 +123,10 @@ void usb_comm_tick(void) {
 
 conn_state_t usb_get_state(void) {
     return state;
+}
+
+bool usb_is_suspended(void) {
+    return suspended;
 }
 
 const char* usb_get_device_name(void) {

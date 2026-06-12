@@ -14,6 +14,12 @@ conn_state_t usb_get_state(void);
 const char*  usb_get_device_name(void);
 const char*  usb_get_port_info(void);
 
+// True while the USB bus is suspended (host stopped sending SOF — e.g. the PC
+// slept or an upstream powered-hub link was pulled while VBUS keeps us alive).
+// This fires in cases where the CDC connect/disconnect events do NOT, because
+// VBUS is still present so there's no detach and the host never drops DTR.
+bool         usb_is_suspended(void);
+
 bool        usb_has_data(void);
 const char* usb_get_data(void);
 void        usb_send_ack(void);

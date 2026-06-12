@@ -110,12 +110,23 @@ Newline-delimited JSON over CDC serial:
    output behind a `hid_enabled` flag; PWR (screen cycling) is always active.
    Compile-time default is set by `-DHID_BUTTONS_DEFAULT=1` in platformio.ini.
 
-9. **Auto screen switching on connect/disconnect.** `loop()` watches
-   `usb_get_state()` (CDC DTR-driven connect/disconnect events). On CONNECTED it
-   shows `SCREEN_USAGE` immediately; on DISCONNECTED it arms a timer and, after
-   `DISCONNECT_TO_SPLASH_MS` (5 min), switches to `SCREEN_SPLASH`. Both are
-   edge-triggered (`disconnect_splash_armed` is cleared once it fires and on the
-   next connect), so PWR-button navigation isn't overridden between transitions.
-   Keyed off the CDC link, not data flow — so the animation only appears while
-   unplugged if a battery keeps the board powered (USB-only boards are off when
-   the cable is out, see gotcha #5).
+9. **Auto screen switching (hybrid).** `loop()` decides the screen from three
+   independent "host gone" signals, because the CDC connect/disconnect events
+   alone miss the powered-hub and PC-sleep cases (VBUS stays up, so there's no
+   detach and the host never drops DTR):
+   - **CDC link** via `usb_get_state()` — DTR-driven; daemon opens/closes the
+     port, or the cable is unplugged on battery (detach).
+   - **USB bus suspend/resume** via `usb_is_suspended()` — `usb_comm.cpp`
+     registers `ARDUINO_USB_SUSPEND_EVENT`/`RESUME` on the `USB` object. SOF
+     stops when an upstream powered-hub link is pulled or the PC sleeps, so this
+     fires when the CDC events don't.
+   - **Data staleness** — no JSON payload for `DATA_STALE_MS` (180 s); daemon
+     alive but silent. Kept above the daemon's 60 s poll interval to avoid false
+     trips on a single skipped poll.
+   On a link drop / suspend the animation (`SCREEN_SPLASH`) appears after
+   `SPLASH_DELAY_MS` (60 s), which also debounces transient blips; the meter
+   (`SCREEN_USAGE`) is restored instantly on connect / resume / data. All
+   switches are edge-triggered (`auto_splash_shown` guards re-firing), so
+   PWR-button navigation isn't overridden between transitions. The animation
+   only shows while truly unplugged if a battery keeps the board powered (gotcha
+   #5); the powered-hub case keeps VBUS, so the screensaver works there.
